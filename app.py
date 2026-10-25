@@ -11,11 +11,15 @@ def home():
         "service": "Music Downloader Backend Engine (yt-dlp)"
     })
 
-@app.route('/download', methods=['POST'])
+@app.route('/download', methods=['POST', 'GET'])
 def download():
-    data = request.json or {}
-    url = data.get('url')
-    is_audio = data.get('isAudio', True)
+    if request.method == 'GET':
+        url = request.args.get('url')
+        is_audio = request.args.get('isAudio', 'true').lower() == 'true'
+    else:
+        data = request.json or {}
+        url = data.get('url')
+        is_audio = data.get('isAudio', True)
 
     if not url:
         return jsonify({'status': 'error', 'message': 'URL requerida'}), 400
@@ -24,12 +28,22 @@ def download():
         'format': 'bestaudio/best' if is_audio else 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'quiet': True,
         'no_warnings': True,
-        'extract_flat': False,
+        'nocheckcertificate': True,
+        'ignoreerrors': True,
+        'geo_bypass': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
+            if not info:
+                return jsonify({'status': 'error', 'message': 'No se pudo obtener informacion'}), 404
+
             title = info.get('title', 'Cancion_Descarga')
 
             url_stream = info.get('url')
@@ -47,7 +61,7 @@ def download():
                     'downloadUrl': url_stream
                 })
             else:
-                return jsonify({'status': 'error', 'message': 'No se encontró flujo de audio'}), 404
+                return jsonify({'status': 'error', 'message': 'No se encontró flujo de audio/video'}), 404
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
